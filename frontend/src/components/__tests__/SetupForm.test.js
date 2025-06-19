@@ -95,7 +95,7 @@ describe('SetupForm Component', () => {
     await waitFor(() => {
       // Verify API was called with correct data
       expect(axios.post).toHaveBeenCalledWith(
-        'http://localhost:5000/api/profile/setup',
+        'http://localhost:5001/api/users/profile',
         {
           bio: 'Test bio',
           subjectsToTeach: [{ subject: 'Mathematics', proficiency: 5 }],

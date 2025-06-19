@@ -14,7 +14,8 @@ function Login() {
     e.preventDefault();
     setError('');
     try {
-      const res = await axios.post('http://localhost:5000/login', formData);
+      const { email, password } = formData;
+      const res = await axios.post('http://localhost:5001/api/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('isAdmin', res.data.isAdmin);
       localStorage.setItem('userName', res.data.name);

@@ -29,7 +29,7 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('http://localhost:5001');
     const token = localStorage.getItem('token');
     
     newSocket.emit('authenticate', token);
@@ -42,7 +42,7 @@ const Chat = () => {
     const fetchConversations = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5000/api/conversations', {
+        const response = await axios.get('http://localhost:5001/api/conversations', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setConversations(response.data);
@@ -59,7 +59,7 @@ const Chat = () => {
       const fetchMessages = async () => {
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.get(`http://localhost:5000/api/messages/${selectedChat._id}`, {
+          const response = await axios.get(`http://localhost:5001/api/messages/${selectedChat._id}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           setMessages(response.data);
@@ -93,7 +93,7 @@ const Chat = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/messages', {
+      await axios.post('http://localhost:5001/api/messages', {
         content: newMessage,
         conversationId: selectedChat._id
       }, {

@@ -41,6 +41,7 @@ const SetupForm = () => {
   const [subjectsToLearn, setSubjectsToLearn] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleAddTeachSubject = () => {
     if (teachSubject && !subjectsToTeach.find(s => s.subject === teachSubject)) {
@@ -72,18 +73,31 @@ const SetupForm = () => {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
-        'http://localhost:5000/api/profile/setup',
+      setLoading(true);
+      setError('');
+      setSuccess('');
+      const response = await axios.put(
+        'http://localhost:5001/api/users/profile',
         {
           bio,
           subjectsToTeach,
           subjectsToLearn,
+          isProfileComplete: true
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      navigate('/dashboard');
+      if (response && response.data) {
+        setSuccess('Profile setup complete! Redirecting...');
+        // Give UI time to show success message
+        setTimeout(() => {
+          localStorage.setItem('isProfileComplete', 'true');
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      } else {
+        setError('Profile update response was invalid');
+      }
     } catch (error) {
       console.error('Error setting up profile:', error);
       setError(error.response?.data?.error || 'Failed to set up profile. Please try again.');
@@ -102,8 +116,13 @@ const SetupForm = () => {
           Help us match you with the perfect study partners
         </Typography>
         {error && (
-          <Typography color="error" sx={{ mb: 2 }}>
+          <Typography color="error" sx={{ mt: 2 }}>
             {error}
+          </Typography>
+        )}
+        {success && (
+          <Typography color="success.main" sx={{ mt: 2 }}>
+            {success}
           </Typography>
         )}
         <form onSubmit={handleSubmit}>

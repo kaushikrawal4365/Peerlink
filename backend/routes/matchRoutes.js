@@ -1,36 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { findMatches } = require('../services/matchingService');
-
-// Get potential matches
+// Get potential matches, sorted by score
 router.get('/potential', async (req, res) => {
     try {
-        const userId = req.user._id;
-        const matches = await findMatches(userId);
-        
-        // Get full user details for matches
-        const potentialMatches = await User.find(
-            { 
-                _id: { $in: matches.map(m => m.user) },
-                status: { $ne: 'blocked' }
-            },
-            '-password'
-        );
-
-        // Combine user details with match scores
-        const detailedMatches = potentialMatches.map(user => {
-            const matchData = matches.find(m => m.user.toString() === user._id.toString());
-            return {
-                ...user.toObject(),
-                matchScore: matchData.matchScore
-            };
+        const userWithMatches = await User.findById(req.user._id).populate({
+            path: 'matches.user',
+            select: '-password' // Exclude passwords of matched users
         });
 
-        res.json(detailedMatches);
+        if (!userWithMatches) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        // Filter for pending matches and sort by score
+        const potentialMatches = userWithMatches.matches
+            .filter(match => match.status === 'pending')
+            .sort((a, b) => b.matchScore - a.matchScore);
+
+        // The `user` field within each match object is now populated
+        res.json(potentialMatches.map(m => m.user));
+
     } catch (error) {
         console.error('Error getting potential matches:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Server Error' });
     }
 });
 
@@ -86,6 +79,37 @@ router.post('/like/:userId', async (req, res) => {
         res.json({ message: 'Match request sent successfully' });
     } catch (error) {
         console.error('Error liking user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Reject a user
+router.post('/reject/:userId', async (req, res) => {
+    try {
+        const currentUserId = req.user._id;
+        const targetUserId = req.params.userId;
+
+        const user = await User.findById(currentUserId);
+        const match = user.matches.find(
+            m => m.user.toString() === targetUserId
+        );
+
+        if (match) {
+            match.status = 'rejected';
+            await user.save();
+            res.json({ message: 'User rejected successfully' });
+        } else {
+            // If no pre-existing match, create one with 'rejected' status
+            user.matches.push({
+                user: targetUserId,
+                status: 'rejected',
+                matchScore: 0 // Score is unknown, but we need to record the rejection
+            });
+            await user.save();
+            res.json({ message: 'User rejected successfully' });
+        }
+    } catch (error) {
+        console.error('Error rejecting user:', error);
         res.status(500).json({ error: error.message });
     }
 });

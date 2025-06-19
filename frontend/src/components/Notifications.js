@@ -31,7 +31,7 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/notifications', {
+      const response = await axios.get('http://localhost:5001/api/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNotifications(response.data);
@@ -43,7 +43,7 @@ const Notifications = () => {
   const handleAction = async (notificationId, action) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/api/notifications/${notificationId}/${action}`, {}, {
+      await axios.post(`http://localhost:5001/api/notifications/${notificationId}/${action}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

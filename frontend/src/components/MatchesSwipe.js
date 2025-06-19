@@ -78,7 +78,7 @@ function MatchesSwipe() {
   const fetchPotentialMatches = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/matches/potential', {
+      const response = await axios.get('http://localhost:5001/api/matches/potential', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPotentialMatches(response.data);
@@ -99,7 +99,7 @@ function MatchesSwipe() {
     if (action === 'like') {
       try {
         const token = localStorage.getItem('token');
-        await axios.post(`http://localhost:5000/api/matches/like/${currentMatch._id}`, {}, {
+        await axios.post(`http://localhost:5001/api/matches/like/${currentMatch._id}`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } catch (error) {

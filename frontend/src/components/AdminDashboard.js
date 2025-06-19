@@ -23,7 +23,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import io from 'socket.io-client';
 import axios from 'axios';
 
-const socket = io('http://localhost:5000');
+const socket = io('http://localhost:5001');
 
 function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -44,9 +44,9 @@ function AdminDashboard() {
     const fetchData = async () => {
       try {
         const [statsRes, usersRes, logsRes] = await Promise.all([
-          axios.get('http://localhost:5000/admin/stats', { headers }),
-          axios.get('http://localhost:5000/admin/users', { headers }),
-          axios.get('http://localhost:5000/admin/logs', { headers })
+          axios.get('http://localhost:5001/admin/stats', { headers }),
+          axios.get('http://localhost:5001/admin/users', { headers }),
+          axios.get('http://localhost:5001/admin/logs', { headers })
         ]);
 
         setStats(statsRes.data);
@@ -79,7 +79,7 @@ function AdminDashboard() {
     
     try {
       await axios.put(
-        `http://localhost:5000/admin/users/${userId}/status`,
+        `http://localhost:5001/admin/users/${userId}/status`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
