@@ -16,6 +16,7 @@ import {
   Dashboard as DashboardIcon,
   People as PeopleIcon,
   Message as MessageIcon,
+  Person as PersonIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 
@@ -24,7 +25,8 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
   { text: 'Matches', path: '/matches', icon: <PeopleIcon /> },
-  { text: 'Messages', path: '/messages', icon: <MessageIcon /> },
+  { text: 'Messages', path: '/chat', icon: <MessageIcon /> },
+  { text: 'Profile', path: '/profile', icon: <PersonIcon /> },
 ];
 
 function NavMenu({ handleLogout }) {

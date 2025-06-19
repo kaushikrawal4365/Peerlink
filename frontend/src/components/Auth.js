@@ -49,10 +49,19 @@ function Auth() {
           email: formData.email,
           password: formData.password,
         });
+        
+        // Save token and user data to localStorage
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('isAdmin', res.data.isAdmin);
         localStorage.setItem('userName', res.data.name);
-        navigate('/dashboard');
+        localStorage.setItem('isProfileComplete', res.data.isProfileComplete);
+        
+        // Redirect based on profile completion status
+        if (!res.data.isProfileComplete) {
+          navigate('/setup');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         // Signup
         if (formData.password !== formData.confirmPassword) {

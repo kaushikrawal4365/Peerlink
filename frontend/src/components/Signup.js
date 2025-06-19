@@ -33,32 +33,44 @@ function Signup() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+// In Signup.js, update the handleSubmit function:
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
+  if (formData.password !== formData.confirmPassword) {
+    setError('Passwords do not match');
+    setLoading(false);
+    return;
+  }
 
-    try {
-      const res = await axios.post('http://localhost:5001/api/auth/signup', {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-      });
+  try {
+    const res = await axios.post('http://localhost:5001/api/auth/signup', {
+      name: formData.name,
+      email: formData.email,
+      password: formData.password
+    });
 
-      localStorage.setItem('token', res.data.token);
+    // Save token and user data to localStorage
+    localStorage.setItem('token', res.data.token);
+    localStorage.setItem('isAdmin', res.data.isAdmin);
+    localStorage.setItem('userName', res.data.name);
+    localStorage.setItem('isProfileComplete', res.data.isProfileComplete);
+
+    // Redirect based on profile completion status
+    if (!res.data.isProfileComplete) {
+      navigate('/setup');
+    } else {
       navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.error || 'An error occurred');
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    setError(err.response?.data?.msg || 'Signup failed. Please try again.');
+    console.error('Signup error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const steps = ['Account Details', 'Personal Information'];
 

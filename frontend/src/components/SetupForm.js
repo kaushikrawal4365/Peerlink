@@ -71,12 +71,11 @@ const SetupForm = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
+
     try {
       const token = localStorage.getItem('token');
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      const response = await axios.put(
+      await axios.put(
         'http://localhost:5001/api/users/profile',
         {
           bio,
@@ -88,19 +87,23 @@ const SetupForm = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      if (response && response.data) {
-        setSuccess('Profile setup complete! Redirecting...');
-        // Give UI time to show success message
+
+      // Update local storage
+      localStorage.setItem('isProfileComplete', 'true');
+      
+      setSuccess('Profile setup completed successfully!');
+      setTimeout(() => navigate('/dashboard'), 1500);
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to update profile. Please try again.';
+      setError(errorMessage);
+      console.error('Profile update error:', err);
+      // If it's an authentication error, redirect to login
+      if (err.response?.status === 401) {
         setTimeout(() => {
-          localStorage.setItem('isProfileComplete', 'true');
-          navigate('/dashboard', { replace: true });
-        }, 1500);
-      } else {
-        setError('Profile update response was invalid');
+          localStorage.removeItem('token');
+          navigate('/login');
+        }, 2000);
       }
-    } catch (error) {
-      console.error('Error setting up profile:', error);
-      setError(error.response?.data?.error || 'Failed to set up profile. Please try again.');
     } finally {
       setLoading(false);
     }
