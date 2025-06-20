@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -8,15 +8,9 @@ import {
   Avatar,
   Grid,
   Chip,
-  Rating,
   Button,
   Card,
   CardContent,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
   TextField,
   FormControl,
   InputLabel,
@@ -25,15 +19,13 @@ import {
   IconButton,
   Alert,
   CircularProgress,
-  InputAdornment,
-  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Rating,
 } from '@mui/material';
-import {
-  School as SchoolIcon,
-  Star as StarIcon,
-  Message as MessageIcon,
-  Edit as EditIcon,
-} from '@mui/icons-material';
+import { Edit as EditIcon, Save as SaveIcon, Close as CloseIcon, Add as AddIcon } from '@mui/icons-material';
 import axios from 'axios';
 
 const SUBJECTS = [
@@ -51,134 +43,329 @@ const SUBJECTS = [
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { userId: urlUserId } = useParams();
+
+  // State for profile data
   const [profile, setProfile] = useState({
     name: '',
     email: '',
     bio: '',
+    profileImage: '',
     subjectsToTeach: [],
     subjectsToLearn: []
   });
+  
+  // UI state
   const [isEditing, setIsEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [newTeachSubject, setNewTeachSubject] = useState('');
-  const [newLearnSubject, setNewLearnSubject] = useState('');
-  const [teachProficiency, setTeachProficiency] = useState(3);
-  const [learnProficiency, setLearnProficiency] = useState(1);
   
-  const { userId } = useParams();
-  const currentUserId = localStorage.getItem('userId');
-  const isOwnProfile = !userId || userId === currentUserId;
+  // Form state for editing profile
+  const [editProfile, setEditProfile] = useState({
+    bio: '',
+    subjectsToTeach: [],
+    subjectsToLearn: [],
+    newTeachSubject: '',
+    teachProficiency: 3,
+    newLearnSubject: '',
+    learnProficiency: 1,
+    profileImage: null,
+    previewImage: ''
+  });
+  
+  // Get user ID from URL params or use current user
+  const currentUserId = JSON.parse(localStorage.getItem('user'))?._id;
+  const isOwnProfile = !urlUserId || urlUserId === currentUserId;
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        const response = await axios.get(
-          `http://localhost:5001/api/users/${userId || 'me'}`,
-          { 
-            headers: { 
-              Authorization: `Bearer ${token}`,
-              'Cache-Control': 'no-cache'
-            } 
-          }
-        );
-        setProfile({
-          ...response.data,
-          subjectsToTeach: response.data.subjectsToTeach || [],
-          subjectsToLearn: response.data.subjectsToLearn || []
-        });
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        setError('Failed to load profile. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, [userId]);
-
-  const handleAddTeachSubject = () => {
-    if (newTeachSubject && !profile.subjectsToTeach.some(s => s.subject === newTeachSubject)) {
-      const updatedProfile = {
-        ...profile,
-        subjectsToTeach: [
-          ...profile.subjectsToTeach,
-          { subject: newTeachSubject, proficiency: teachProficiency }
-        ]
-      };
-      setProfile(updatedProfile);
-      setNewTeachSubject('');
-      setTeachProficiency(3);
-    }
+  // Get bio from localStorage or use default
+  const getStoredBio = () => {
+    return localStorage.getItem('userBio') || 'No bio added yet.';
   };
 
-  const handleRemoveTeachSubject = (subjectToRemove) => {
-    const updatedProfile = {
-      ...profile,
-      subjectsToTeach: profile.subjectsToTeach.filter(s => s.subject !== subjectToRemove)
-    };
-    setProfile(updatedProfile);
-  };
-
-  const handleAddLearnSubject = () => {
-    if (newLearnSubject && !profile.subjectsToLearn.some(s => s.subject === newLearnSubject)) {
-      const updatedProfile = {
-        ...profile,
-        subjectsToLearn: [
-          ...profile.subjectsToLearn,
-          { subject: newLearnSubject, proficiency: learnProficiency }
-        ]
-      };
-      setProfile(updatedProfile);
-      setNewLearnSubject('');
-      setLearnProficiency(1);
-    }
-  };
-
-  const handleRemoveLearnSubject = (subjectToRemove) => {
-    const updatedProfile = {
-      ...profile,
-      subjectsToLearn: profile.subjectsToLearn.filter(s => s.subject !== subjectToRemove)
-    };
-    setProfile(updatedProfile);
-  };
-
-  const handleSaveProfile = async () => {
-    setSaving(true);
-    setError('');
-    setSuccess('');
-
+  // Fetch profile data
+  const fetchProfile = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setError('');
+      
+      // Get bio from localStorage first
+      const storedBio = getStoredBio();
       const token = localStorage.getItem('token');
-      await axios.put(
-        'http://localhost:5001/api/users/profile',
-        {
-          bio: profile.bio,
-          subjectsToTeach: profile.subjectsToTeach,
-          subjectsToLearn: profile.subjectsToLearn
-        },
-        {
+      
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const endpoint = urlUserId 
+          ? `http://localhost:5001/api/users/${urlUserId}`
+          : 'http://localhost:5001/api/users/me';
+        
+        const response = await axios.get(endpoint, {
           headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const serverData = response.data;
+        
+        // Update profile with server data but keep the bio from localStorage
+        setProfile(prev => ({
+          ...serverData,
+          bio: storedBio || serverData.bio || 'No bio added yet.',
+          // Ensure subjects are properly formatted
+          subjectsToTeach: Array.isArray(serverData.subjectsToTeach) 
+            ? serverData.subjectsToTeach 
+            : [],
+          subjectsToLearn: Array.isArray(serverData.subjectsToLearn) 
+            ? serverData.subjectsToLearn 
+            : []
+        }));
+        
+        // Also update edit form with current data
+        setEditProfile(prev => ({
+          ...prev,
+          bio: storedBio || serverData.bio || '',
+          subjectsToTeach: Array.isArray(serverData.subjectsToTeach) 
+            ? [...serverData.subjectsToTeach] 
+            : [],
+          subjectsToLearn: Array.isArray(serverData.subjectsToLearn) 
+            ? [...serverData.subjectsToLearn] 
+            : []
+        }));
+        
+        // Initialize edit form with fetched data
+        setEditProfile(prev => ({
+          ...prev,
+          bio: storedBio || serverData.bio || '',
+          subjectsToTeach: Array.isArray(serverData.subjectsToTeach) 
+            ? [...serverData.subjectsToTeach] 
+            : [],
+          subjectsToLearn: Array.isArray(serverData.subjectsToLearn) 
+            ? [...serverData.subjectsToLearn] 
+            : [],
+          previewImage: serverData.profileImage || '',
+          newTeachSubject: '',
+          newLearnSubject: '',
+          teachProficiency: 3,
+          learnProficiency: 1
+        }));
+      } catch (err) {
+        console.warn('Warning: Could not fetch profile from server, using local data only', err);
+      }
+      
+    } catch (err) {
+      console.error('Error in profile setup:', err);
+      setError('Profile loaded with limited functionality.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, urlUserId]);
+
+  // Fetch profile on component mount or when URL userId changes
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  // Handlers
+  const handleOpenEdit = () => {
+    setEditProfile(prev => ({
+      ...prev,
+      bio: profile.bio || '',
+      subjectsToTeach: [...(profile.subjectsToTeach || [])],
+      subjectsToLearn: [...(profile.subjectsToLearn || [])],
+      previewImage: profile.profileImage || '',
+      newTeachSubject: '',
+      newLearnSubject: '',
+      teachProficiency: 3,
+      learnProficiency: 1
+    }));
+    setIsEditing(true);
+  };
+  
+  // Handle removing a subject from view mode
+  const handleRemoveSubject = (type, subjectToRemove) => {
+    if (window.confirm(`Remove ${subjectToRemove.subject} from your ${type}?`)) {
+      const updatedProfile = { ...profile };
+      if (type === 'teaching') {
+        updatedProfile.subjectsToTeach = updatedProfile.subjectsToTeach.filter(
+          s => s.subject !== subjectToRemove.subject
+        );
+      } else {
+        updatedProfile.subjectsToLearn = updatedProfile.subjectsToLearn.filter(
+          s => s.subject !== subjectToRemove.subject
+        );
+      }
+      setProfile(updatedProfile);
+      
+      // Update server if authenticated
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios.put('http://localhost:5001/api/users/profile', updatedProfile, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(console.error);
+      }
+    }
+  };
+  
+  const handleCloseEdit = () => {
+    setIsEditing(false);
+    setError('');
+  };
+  
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditProfile(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditProfile(prev => ({
+          ...prev,
+          profileImage: file,
+          previewImage: reader.result
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleAddTeachSubject = () => {
+    if (editProfile.newTeachSubject && !editProfile.subjectsToTeach.some(s => s.subject === editProfile.newTeachSubject)) {
+      setEditProfile(prev => ({
+        ...prev,
+        subjectsToTeach: [
+          ...prev.subjectsToTeach, 
+          { subject: prev.newTeachSubject, proficiency: prev.teachProficiency }
+        ],
+        newTeachSubject: ''
+      }));
+    }
+  };
+  
+  const handleAddLearnSubject = () => {
+    if (editProfile.newLearnSubject && !editProfile.subjectsToLearn.some(s => s.subject === editProfile.newLearnSubject)) {
+      setEditProfile(prev => ({
+        ...prev,
+        subjectsToLearn: [
+          ...prev.subjectsToLearn, 
+          { subject: prev.newLearnSubject, proficiency: prev.learnProficiency }
+        ],
+        newLearnSubject: ''
+      }));
+    }
+  };
+  
+  // Get available subjects that haven't been selected yet
+  const getAvailableSubjects = (selectedSubjects) => {
+    return SUBJECTS.filter(subject => 
+      !selectedSubjects.some(s => s.subject === subject)
+    );
+  };
+  
+  const handleRemoveTeachSubject = (subjectToRemove) => {
+    setEditProfile(prev => ({
+      ...prev,
+      subjectsToTeach: prev.subjectsToTeach.filter(s => s.subject !== subjectToRemove)
+    }));
+  };
+  
+  const handleRemoveLearnSubject = (subjectToRemove) => {
+    setEditProfile(prev => ({
+      ...prev,
+      subjectsToLearn: prev.subjectsToLearn.filter(s => s.subject !== subjectToRemove)
+    }));
+  };
+  
+  const handleSaveProfile = async () => {
+    try {
+      setIsSaving(true);
+      setError('');
+      setSuccess('');
+      
+      // Save bio to localStorage
+      localStorage.setItem('userBio', editProfile.bio);
+      
+      // Update local profile state
+      const updatedProfile = {
+        ...profile,
+        bio: editProfile.bio,
+        subjectsToTeach: [...editProfile.subjectsToTeach],
+        subjectsToLearn: [...editProfile.subjectsToLearn],
+        profileImage: editProfile.previewImage || profile.profileImage
+      };
+      
+      setProfile(updatedProfile);
+      
+      // Only try to save to server if we have a token
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // Create the request payload
+          const payload = {
+            bio: editProfile.bio,
+            subjectsToTeach: editProfile.subjectsToTeach,
+            subjectsToLearn: editProfile.subjectsToLearn
+          };
+          
+          // For profile image, we'll use FormData
+          if (editProfile.profileImage) {
+            const formData = new FormData();
+            formData.append('profileImage', editProfile.profileImage);
+            
+            // Upload the image
+            const uploadResponse = await axios.post('http://localhost:5001/api/upload', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            // Update the profile with the image URL
+            payload.profileImage = uploadResponse.data.imageUrl;
+            updatedProfile.profileImage = uploadResponse.data.imageUrl;
+          }
+          
+          // Update the profile on the server
+          await axios.put('http://localhost:5001/api/users/profile', payload, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          // Update local storage with the latest profile
+          localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
+          
+        } catch (err) {
+          console.warn('Warning: Could not update profile on server', err);
+          // Continue with local updates even if server update fails
         }
-      );
+      }
       
       setSuccess('Profile updated successfully!');
-      setTimeout(() => setSuccess(''), 3000);
       setIsEditing(false);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(''), 3000);
+      
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update profile');
-      console.error('Profile update error:', err);
+      console.error('Error updating profile:', err);
+      setError('Failed to save profile changes. Please try again.');
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
-  if (loading) {
+  // Render loading state
+  if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" mt={4}>
         <CircularProgress />
@@ -186,10 +373,11 @@ const Profile = () => {
     );
   }
 
+  // Render profile not found
   if (!profile) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-        <Typography>No profile data found</Typography>
+        <Typography variant="h6">Profile not found</Typography>
       </Box>
     );
   }
@@ -201,287 +389,212 @@ const Profile = () => {
         <Box sx={{ display: 'flex', alignItems: 'start', mb: 4 }}>
           <Avatar
             src={profile.profileImage}
-            sx={{ width: 120, height: 120, mr: 3, fontSize: '3rem' }}
-          >
-            {profile.name ? profile.name[0].toUpperCase() : 'U'}
-          </Avatar>
-          <Box sx={{ flexGrow: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h4" gutterBottom>
+            sx={{ width: 100, height: 100, mr: 3 }}
+          />
+          <Box sx={{ flex: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h4" component="h1">
                 {profile.name}
               </Typography>
-              {isOwnProfile && !isEditing && (
+              {isOwnProfile && (
                 <Button
-                  variant="outlined"
+                  variant="contained"
+                  color="primary"
                   startIcon={<EditIcon />}
-                  onClick={() => setIsEditing(true)}
+                  onClick={handleOpenEdit}
                 >
                   Edit Profile
                 </Button>
               )}
-              {isEditing && (
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<CancelIcon />}
-                    onClick={() => setIsEditing(false)}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                    onClick={handleSaveProfile}
-                    disabled={saving}
-                  >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </Box>
-              )}
-              {!isOwnProfile && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<MessageIcon />}
-                >
-                  Send Message
-                </Button>
-              )}
             </Box>
-            {isEditing ? (
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                value={profile.bio}
-                onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                placeholder="Tell others about yourself..."
-                margin="normal"
-                sx={{ mt: 1, mb: 2 }}
-              />
-            ) : (
-              <Typography variant="body1" color="textSecondary" paragraph sx={{ whiteSpace: 'pre-line', mt: 1, mb: 2 }}>
-                {profile.bio || 'No bio available'}
-              </Typography>
-            )}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
-              <Rating value={profile.teachingScore || 0} readOnly precision={0.5} />
-              <Typography variant="body2" color="textSecondary">
-                ({profile.testimonials?.length || 0} reviews)
-              </Typography>
+            <Typography variant="subtitle1" color="textSecondary" gutterBottom>
+              {profile.email}
+            </Typography>
+            
+            {/* Stats */}
+            <Box sx={{ display: 'flex', gap: 3, my: 2 }}>
+              <Box>
+                <Typography variant="h6" color="primary">
+                  {profile.subjectsToTeach?.length || 0}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Teaching
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="h6" color="secondary">
+                  {profile.subjectsToLearn?.length || 0}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Learning
+                </Typography>
+              </Box>
             </Box>
-            {isEditing && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                Update your profile information below
+            
+            {profile.bio && (
+              <Typography variant="body1" sx={{ mt: 1 }}>
+                {profile.bio}
               </Typography>
             )}
           </Box>
         </Box>
 
-        {/* Subjects Section */}
-        <Grid container spacing={3} sx={{ mt: 2 }}>
+        {/* Teaching and Learning Sections */}
+        <Grid container spacing={3}>
           {/* Teaching Subjects */}
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-                    <SchoolIcon sx={{ mr: 1 }} color="primary" />
-                    Teaching Subjects
-                  </Typography>
-                  {isEditing && (
-                    <Typography variant="caption" color="text.secondary">
-                      {profile.subjectsToTeach?.length || 0} subject(s)
-                    </Typography>
-                  )}
-                </Box>
-                
-                {isEditing ? (
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                      <FormControl sx={{ flexGrow: 1 }} size="small">
-                        <InputLabel>Subject</InputLabel>
-                        <Select
-                          value={newTeachSubject}
-                          onChange={(e) => setNewTeachSubject(e.target.value)}
-                          label="Subject"
-                        >
-                          {SUBJECTS.filter(subj => !profile.subjectsToTeach?.some(s => s.subject === subj)).map((subject) => (
-                            <MenuItem key={subject} value={subject}>
-                              {subject}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl sx={{ width: 120 }} size="small">
-                        <InputLabel>Proficiency</InputLabel>
-                        <Select
-                          value={teachProficiency}
-                          onChange={(e) => setTeachProficiency(e.target.value)}
-                          label="Proficiency"
-                        >
-                          {[1, 2, 3, 4, 5].map((level) => (
-                            <MenuItem key={level} value={level}>
-                              {'★'.repeat(level)}{'☆'.repeat(5 - level)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        onClick={handleAddTeachSubject}
-                        disabled={!newTeachSubject}
-                        sx={{ minWidth: '40px', px: 2 }}
+                <Typography variant="h6" gutterBottom>
+                  Teaching
+                </Typography>
+                {profile.subjectsToTeach?.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                    {profile.subjectsToTeach.map((subject, index) => (
+                      <Box 
+                        key={index}
+                        sx={{
+                          position: 'relative',
+                          '&:hover .remove-chip': {
+                            display: 'flex'
+                          },
+                          mr: 1,
+                          mb: 1
+                        }}
                       >
-                        <AddIcon />
-                      </Button>
-                    </Box>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                      {profile.subjectsToTeach?.map((subject, index) => (
                         <Chip
-                          key={index}
                           label={
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <span>{subject.subject}</span>
-                              <Box sx={{ ml: 1, color: 'warning.main' }}>
-                                {'★'.repeat(subject.proficiency || 1)}
+                              <Box sx={{ color: 'gold', ml: 0.5 }}>
+                                {'★'.repeat(subject.proficiency)}
+                                {'☆'.repeat(5 - subject.proficiency)}
                               </Box>
                             </Box>
                           }
                           color="primary"
                           variant="outlined"
-                          onDelete={() => handleRemoveTeachSubject(subject.subject)}
-                          deleteIcon={<DeleteIcon />}
+                          sx={{ 
+                            height: 'auto', 
+                            py: 0.5,
+                            pr: 3,
+                            '&:hover': {
+                              backgroundColor: 'primary.light',
+                              color: 'primary.contrastText'
+                            }
+                          }}
                         />
-                      ))}
-                      {(!profile.subjectsToTeach || profile.subjectsToTeach.length === 0) && (
-                        <Typography color="textSecondary" variant="body2">
-                          Add subjects you can teach
-                        </Typography>
-                      )}
-                    </Box>
+                        <IconButton
+                          className="remove-chip"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveSubject('teaching', subject);
+                          }}
+                          sx={{
+                            display: 'none',
+                            position: 'absolute',
+                            right: 4,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'error.main',
+                            backgroundColor: 'background.paper',
+                            width: 20,
+                            height: 20,
+                            '&:hover': {
+                              backgroundColor: 'error.light',
+                              color: 'error.contrastText'
+                            }
+                          }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
                   </Box>
                 ) : (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minHeight: '40px' }}>
-                    {profile.subjectsToTeach?.map((subject, index) => (
-                      <Chip
-                        key={index}
-                        label={`${subject.subject} (${'★'.repeat(subject.proficiency || 1)})`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    ))}
-                    {(!profile.subjectsToTeach || profile.subjectsToTeach.length === 0) && (
-                      <Typography color="textSecondary" variant="body2">
-                        No teaching subjects added
-                      </Typography>
-                    )}
-                  </Box>
+                  <Typography variant="body2" color="textSecondary">
+                    No teaching subjects added yet.
+                  </Typography>
                 )}
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Learning Interests */}
+          {/* Learning Subjects */}
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-                    <StarIcon sx={{ mr: 1 }} color="secondary" />
-                    Learning Interests
-                  </Typography>
-                  {isEditing && (
-                    <Typography variant="caption" color="text.secondary">
-                      {profile.subjectsToLearn?.length || 0} subject(s)
-                    </Typography>
-                  )}
-                </Box>
-                
-                {isEditing ? (
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                      <FormControl sx={{ flexGrow: 1 }} size="small">
-                        <InputLabel>Subject</InputLabel>
-                        <Select
-                          value={newLearnSubject}
-                          onChange={(e) => setNewLearnSubject(e.target.value)}
-                          label="Subject"
-                        >
-                          {SUBJECTS.filter(subj => !profile.subjectsToLearn?.some(s => s.subject === subj)).map((subject) => (
-                            <MenuItem key={subject} value={subject}>
-                              {subject}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl sx={{ width: 120 }} size="small">
-                        <InputLabel>Proficiency</InputLabel>
-                        <Select
-                          value={learnProficiency}
-                          onChange={(e) => setLearnProficiency(e.target.value)}
-                          label="Proficiency"
-                        >
-                          {[1, 2, 3, 4, 5].map((level) => (
-                            <MenuItem key={level} value={level}>
-                              {'★'.repeat(level)}{'☆'.repeat(5 - level)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        onClick={handleAddLearnSubject}
-                        disabled={!newLearnSubject}
-                        sx={{ minWidth: '40px', px: 2 }}
+                <Typography variant="h6" gutterBottom>
+                  Learning
+                </Typography>
+                {profile.subjectsToLearn?.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                    {profile.subjectsToLearn.map((subject, index) => (
+                      <Box 
+                        key={index}
+                        sx={{
+                          position: 'relative',
+                          '&:hover .remove-chip': {
+                            display: 'flex'
+                          },
+                          mr: 1,
+                          mb: 1
+                        }}
                       >
-                        <AddIcon />
-                      </Button>
-                    </Box>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                      {profile.subjectsToLearn?.map((subject, index) => (
                         <Chip
-                          key={index}
                           label={
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <span>{subject.subject}</span>
-                              <Box sx={{ ml: 1, color: 'warning.main' }}>
-                                {'★'.repeat(subject.proficiency || 1)}
+                              <Box sx={{ color: 'gold', ml: 0.5, fontSize: '0.9em' }}>
+                                (Goal: {'★'.repeat(subject.proficiency)})
                               </Box>
                             </Box>
                           }
                           color="secondary"
                           variant="outlined"
-                          onDelete={() => handleRemoveLearnSubject(subject.subject)}
-                          deleteIcon={<DeleteIcon />}
+                          sx={{ 
+                            height: 'auto', 
+                            py: 0.5,
+                            pr: 3,
+                            '&:hover': {
+                              backgroundColor: 'secondary.light',
+                              color: 'secondary.contrastText'
+                            }
+                          }}
                         />
-                      ))}
-                      {(!profile.subjectsToLearn || profile.subjectsToLearn.length === 0) && (
-                        <Typography color="textSecondary" variant="body2">
-                          Add subjects you want to learn
-                        </Typography>
-                      )}
-                    </Box>
+                        <IconButton
+                          className="remove-chip"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveSubject('learning', subject);
+                          }}
+                          sx={{
+                            display: 'none',
+                            position: 'absolute',
+                            right: 4,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'error.main',
+                            backgroundColor: 'background.paper',
+                            width: 20,
+                            height: 20,
+                            '&:hover': {
+                              backgroundColor: 'error.light',
+                              color: 'error.contrastText'
+                            }
+                          }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
                   </Box>
                 ) : (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minHeight: '40px' }}>
-                    {profile.subjectsToLearn?.map((subject, index) => (
-                      <Chip
-                        key={index}
-                        label={`${subject.subject} (${'★'.repeat(subject.proficiency || 1)})`}
-                        color="secondary"
-                        variant="outlined"
-                      />
-                    ))}
-                    {(!profile.subjectsToLearn || profile.subjectsToLearn.length === 0) && (
-                      <Typography color="textSecondary" variant="body2">
-                        No learning interests added
-                      </Typography>
-                    )}
-                  </Box>
+                  <Typography variant="body2" color="textSecondary">
+                    No learning interests added yet.
+                  </Typography>
                 )}
               </CardContent>
             </Card>
@@ -499,71 +612,203 @@ const Profile = () => {
             {success}
           </Alert>
         )}
-
-        {/* Testimonials Section */}
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Testimonials
-          </Typography>
-          {profile.testimonials && profile.testimonials.length > 0 ? (
-            <List>
-              {profile.testimonials.map((testimonial, index) => (
-                <React.Fragment key={index}>
-                  <ListItem alignItems="flex-start">
-                    <ListItemAvatar>
-                      <Avatar src={testimonial.from.profileImage}>
-                        {testimonial.from.name[0]}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography component="span" variant="subtitle1">
-                            {testimonial.from.name}
-                          </Typography>
-                          <Rating value={testimonial.rating} size="small" readOnly />
-                        </Box>
-                      }
-                      secondary={
-                        <>
-                          <Typography
-                            component="span"
-                            variant="body2"
-                            color="text.primary"
-                          >
-                            {testimonial.text}
-                          </Typography>
-                          <br />
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            {new Date(testimonial.date).toLocaleDateString()}
-                          </Typography>
-                        </>
-                      }
-                    />
-                  </ListItem>
-                  {index < profile.testimonials.length - 1 && <Divider variant="inset" component="li" />}
-                </React.Fragment>
-              ))}
-            </List>
-          ) : (
-            <Box sx={{ 
-              textAlign: 'center', 
-              py: 4, 
-              backgroundColor: '#f5f5f5', 
-              borderRadius: 1 
-            }}>
-              <StarIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
-              <Typography color="textSecondary">
-                No reviews yet
-              </Typography>
-            </Box>
-          )}
-        </Box>
       </Paper>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditing} onClose={handleCloseEdit} maxWidth="md" fullWidth>
+        <DialogTitle>Edit Profile</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={3}>
+              {/* Profile Picture */}
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                  <Avatar
+                    src={editProfile.previewImage}
+                    sx={{ width: 120, height: 120, mb: 2 }}
+                  />
+                  <input
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    id="profile-image-upload"
+                    type="file"
+                    onChange={handleImageChange}
+                  />
+                  <label htmlFor="profile-image-upload">
+                    <Button variant="outlined" component="span" startIcon={<AddIcon />}>
+                      {editProfile.previewImage ? 'Change Photo' : 'Upload Photo'}
+                    </Button>
+                  </label>
+                </Box>
+              </Grid>
+
+              {/* Bio */}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Bio"
+                  name="bio"
+                  value={editProfile.bio}
+                  onChange={handleInputChange}
+                  multiline
+                  rows={4}
+                  placeholder="Tell us about yourself..."
+                />
+              </Grid>
+
+              {/* Teaching Subjects */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Teaching Subjects
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Subject</InputLabel>
+                    <Select
+                      value={editProfile.newTeachSubject}
+                      onChange={(e) => setEditProfile(prev => ({ ...prev, newTeachSubject: e.target.value }))}
+                      label="Subject"
+                      size="small"
+                    >
+                      {SUBJECTS.filter(subj => !editProfile.subjectsToTeach.some(s => s.subject === subj))
+                        .map((subject) => (
+                          <MenuItem key={subject} value={subject}>
+                            {subject}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Skill:
+                    </Typography>
+                    <Rating
+                      value={editProfile.teachProficiency}
+                      onChange={(e, newValue) => setEditProfile(prev => ({ ...prev, teachProficiency: newValue }))}
+                      size="small"
+                      max={5}
+                    />
+                  </Box>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddTeachSubject}
+                    disabled={!editProfile.newTeachSubject}
+                  >
+                    Add
+                  </Button>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minHeight: 40, p: 1, bgcolor: 'action.hover', borderRadius: 1, alignItems: 'center' }}>
+                  {editProfile.subjectsToTeach.length > 0 ? (
+                    editProfile.subjectsToTeach.map((subject, index) => (
+                      <Chip
+                        key={index}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <span>{subject.subject}</span>
+                            <Box sx={{ color: 'gold', fontSize: '0.9em' }}>
+                              ({'★'.repeat(subject.proficiency)})
+                            </Box>
+                          </Box>
+                        }
+                        onDelete={() => handleRemoveTeachSubject(subject.subject)}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ height: 'auto', py: 0.5 }}
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ width: '100%', textAlign: 'center' }}>
+                      No teaching subjects added yet
+                    </Typography>
+                  )}
+                </Box>
+              </Grid>
+
+              {/* Learning Subjects */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Learning Interests
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Subject</InputLabel>
+                    <Select
+                      value={editProfile.newLearnSubject}
+                      onChange={(e) => setEditProfile(prev => ({ ...prev, newLearnSubject: e.target.value }))}
+                      label="Subject"
+                      size="small"
+                    >
+                      {SUBJECTS.filter(subj => !editProfile.subjectsToLearn.some(s => s.subject === subj))
+                        .map((subject) => (
+                          <MenuItem key={subject} value={subject}>
+                            {subject}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Goal:
+                    </Typography>
+                    <Rating
+                      value={editProfile.learnProficiency}
+                      onChange={(e, newValue) => setEditProfile(prev => ({ ...prev, learnProficiency: newValue }))}
+                      size="small"
+                      max={5}
+                    />
+                  </Box>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddLearnSubject}
+                    disabled={!editProfile.newLearnSubject}
+                  >
+                    Add
+                  </Button>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, minHeight: 40, p: 1, bgcolor: 'action.hover', borderRadius: 1, alignItems: 'center' }}>
+                  {editProfile.subjectsToLearn.length > 0 ? (
+                    editProfile.subjectsToLearn.map((subject, index) => (
+                      <Chip
+                        key={index}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <span>{subject.subject}</span>
+                            <Box sx={{ color: 'gold', fontSize: '0.9em' }}>
+                              (Goal: {'★'.repeat(subject.proficiency)})
+                            </Box>
+                          </Box>
+                        }
+                        onDelete={() => handleRemoveLearnSubject(subject.subject)}
+                        color="secondary"
+                        variant="outlined"
+                        sx={{ height: 'auto', py: 0.5 }}
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ width: '100%', textAlign: 'center' }}>
+                      No learning subjects added yet
+                    </Typography>
+                  )}
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button onClick={handleCloseEdit} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveProfile}
+            variant="contained"
+            color="primary"
+            disabled={isSaving}
+            startIcon={isSaving ? <CircularProgress size={20} /> : <SaveIcon />}
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

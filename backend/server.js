@@ -54,10 +54,24 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ msg: 'User already exists' });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    user = new User({ name, email, password: hashedPassword });
+    user = new User({ 
+      name, 
+      email, 
+      password: hashedPassword,
+      isProfileComplete: false // Ensure new users complete profile setup
+    });
     await user.save();
-    const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.status(201).json({ token });
+    const token = jwt.sign({ 
+      userId: user._id, 
+      isAdmin: user.isAdmin 
+    }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    
+    res.status(201).json({ 
+      token, 
+      isProfileComplete: user.isProfileComplete,
+      name: user.name,
+      isAdmin: user.isAdmin
+    });
   } catch (error) {
     console.error('❌ Signup error:', error.message);
     res.status(500).json({ error: error.message || 'Server Error' });
@@ -77,8 +91,17 @@ app.post('/api/auth/login', async (req, res) => {
     user.status = 'online';
     user.lastActive = new Date();
     await user.save();
-    const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, isAdmin: user.isAdmin, name: user.name });
+    const token = jwt.sign({ 
+      userId: user._id, 
+      isAdmin: user.isAdmin 
+    }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    
+    res.json({ 
+      token, 
+      isAdmin: user.isAdmin, 
+      name: user.name,
+      isProfileComplete: user.isProfileComplete || false
+    });
   } catch (error) {
     console.error('❌ Login error:', error.message);
     res.status(500).json({ error: 'Server Error' });
