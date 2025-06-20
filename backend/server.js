@@ -108,6 +108,92 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Admin User Management Routes
+app.get('/api/users', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get all users (excluding passwords)
+    const users = await User.find({}, { password: 0 });
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update user status (block/unblock)
+app.put('/api/users/:id/status', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { status } = req.body;
+    const userId = req.params.id;
+
+    // Prevent modifying other admins
+    if (userId === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot modify your own status' });    
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent modifying other admins
+    if (user.isAdmin) {
+      return res.status(400).json({ error: 'Cannot modify admin users' });
+    }
+
+    user.status = status;
+    await user.save();
+
+    res.json({ message: 'User status updated', user: { _id: user._id, status: user.status } });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete user
+app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const userId = req.params.id;
+
+    // Prevent deleting self
+    if (userId === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting other admins
+    if (user.isAdmin) {
+      return res.status(400).json({ error: 'Cannot delete admin users' });
+    }
+
+    await User.findByIdAndDelete(userId);
+    res.json({ message: 'User deleted' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // User Profile & Subject Management Routes
 app.get('/api/users/profile', authMiddleware, async (req, res) => {
   console.log('[API] GET /api/users/profile route reached for user:', req.user.email);
@@ -160,6 +246,67 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
         console.error('[API] Error updating profile:', err.message);
         res.status(500).json({ error: 'Server error', details: err.message });
     }
+});
+
+// Admin User Management Routes
+app.get('/api/users', authMiddleware, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const users = await User.find({}).select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/users/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (user.isAdmin) {
+      return res.status(403).json({ error: 'Cannot modify admin status' });
+    }
+    
+    user.status = req.body.status;
+    await user.save();
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (user.isAdmin) {
+      return res.status(403).json({ error: 'Cannot delete admin user' });
+    }
+    
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // Core Application Routes

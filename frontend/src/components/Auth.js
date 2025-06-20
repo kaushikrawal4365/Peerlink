@@ -56,8 +56,10 @@ function Auth() {
         localStorage.setItem('userName', res.data.name);
         localStorage.setItem('isProfileComplete', res.data.isProfileComplete);
         
-        // Redirect based on profile completion status
-        if (!res.data.isProfileComplete) {
+        // Redirect to admin page if admin, otherwise to dashboard
+        if (res.data.isAdmin) {
+          navigate('/admin');
+        } else if (!res.data.isProfileComplete) {
           navigate('/setup');
         } else {
           navigate('/dashboard');

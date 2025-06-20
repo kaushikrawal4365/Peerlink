@@ -1,220 +1,283 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTheme, styled } from '@mui/material/styles';
 import {
   Container,
-  Grid,
-  Paper,
   Typography,
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
-  IconButton,
+  Paper,
   Box,
-  Card,
-  CardContent,
+  CircularProgress,
+  Button,
+  IconButton,
+  Chip,
+  TextField,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Tooltip
 } from '@mui/material';
-import Person from '@mui/icons-material/Person';
-import Message from '@mui/icons-material/Message';
-import Timeline from '@mui/icons-material/Timeline';
-import Block from '@mui/icons-material/Block';
-import CheckCircle from '@mui/icons-material/CheckCircle';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import io from 'socket.io-client';
+import Delete from '@mui/icons-material/Delete';
+import Refresh from '@mui/icons-material/Refresh';
+import Logout from '@mui/icons-material/Logout';
 import axios from 'axios';
 
-const socket = io('http://localhost:5001');
+// Styled components for the admin layout
+const AdminContainer = styled('div')({
+  display: 'flex',
+  minHeight: '100vh',
+  backgroundColor: '#f5f5f5',
+});
 
-function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    totalMessages: 0,
-    newUsersToday: 0,
-    subjectStats: []
-  });
+const MainContent = styled('main')(({ theme }) => ({
+  flexGrow: 1,
+  padding: theme.spacing(3),
+  transition: theme.transitions.create('margin', {
+    easing: theme.transitions.easing.sharp,
+    duration: theme.transitions.duration.leavingScreen,
+  }),
+  marginLeft: 0,
+  width: '100%',
+}));
+
+const AppBar = styled('div')(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
+  padding: theme.spacing(2),
+  marginBottom: theme.spacing(4),
+  borderRadius: theme.shape.borderRadius,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+}));
+
+// API base URL
+const API_URL = 'http://localhost:5001/api';
+
+const AdminDashboard = () => {
+  const theme = useTheme();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
-  const [activityLogs, setActivityLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: null, userName: '' });
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers = { Authorization: `Bearer ${token}` };
-
-    // Fetch initial data
-    const fetchData = async () => {
-      try {
-        const [statsRes, usersRes, logsRes] = await Promise.all([
-          axios.get('http://localhost:5001/admin/stats', { headers }),
-          axios.get('http://localhost:5001/admin/users', { headers }),
-          axios.get('http://localhost:5001/admin/logs', { headers })
-        ]);
-
-        setStats(statsRes.data);
-        setUsers(usersRes.data);
-        setActivityLogs(logsRes.data);
-      } catch (error) {
-        console.error('Error fetching admin data:', error);
-      }
-    };
-
-    fetchData();
-
-    // Socket.io event listeners
-    socket.on('user_status_changed', ({ userId, status }) => {
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user._id === userId ? { ...user, status } : user
-        )
-      );
-    });
-
-    return () => {
-      socket.off('user_status_changed');
-    };
-  }, []);
-
-  const toggleUserStatus = async (userId, currentStatus) => {
-    const token = localStorage.getItem('token');
-    const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked';
-    
+  const fetchUsers = async () => {
     try {
-      await axios.put(
-        `http://localhost:5001/admin/users/${userId}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setUsers(prevUsers =>
-        prevUsers.map(user =>
-          user._id === userId ? { ...user, status: newStatus } : user
-        )
-      );
-    } catch (error) {
-      console.error('Error updating user status:', error);
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUsers(response.data);
+      setError('');
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setError('Failed to fetch users. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Grid container spacing={3}>
-        {/* Stats Cards */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Users
-              </Typography>
-              <Typography variant="h4">{stats.totalUsers}</Typography>
-              <Person />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Active Users
-              </Typography>
-              <Typography variant="h4">{stats.activeUsers}</Typography>
-              <CheckCircle />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Messages
-              </Typography>
-              <Typography variant="h4">{stats.totalMessages}</Typography>
-              <Message />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                New Users Today
-              </Typography>
-              <Typography variant="h4">{stats.newUsersToday}</Typography>
-              <Timeline />
-            </CardContent>
-          </Card>
-        </Grid>
+  const refreshUsers = fetchUsers; // Alias for backward compatibility
 
-        {/* Activity Chart */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              User Activity
-            </Typography>
-            <LineChart
-              width={900}
-              height={300}
-              data={activityLogs}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="_id" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="messageCount" stroke="#8884d8" />
-            </LineChart>
-          </Paper>
-        </Grid>
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
-        {/* Users Table */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Users
-            </Typography>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Last Active</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user._id}>
-                    <TableCell>{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Box
-                        component="span"
-                        sx={{
-                          color: user.status === 'online' ? 'success.main' : 'text.secondary'
-                        }}
-                      >
-                        {user.status}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(user.lastActive).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        onClick={() => toggleUserStatus(user._id, user.status)}
-                        color={user.status === 'blocked' ? 'primary' : 'default'}
-                      >
-                        <Block />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
-        </Grid>
-      </Grid>
-    </Container>
+  const handleDelete = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/users/${deleteDialog.userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Remove the user from the local state
+      setUsers(users.filter(user => user._id !== deleteDialog.userId));
+      setDeleteDialog({ ...deleteDialog, open: false });
+      setError('');
+    } catch (err) {
+      console.error('Delete error:', err);
+      setError(err.response?.data?.error || 'Failed to delete user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+  const filteredUsers = users.filter(user => 
+    user.name?.toLowerCase().includes(search.toLowerCase()) ||
+    user.email?.toLowerCase().includes(search.toLowerCase())
   );
-}
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <AdminContainer>
+      <MainContent>
+        <AppBar>
+          <Typography variant="h5" component="h1">
+            PeerLink Admin Dashboard
+          </Typography>
+          <Button 
+            color="inherit" 
+            onClick={() => {
+              localStorage.removeItem('token');
+              navigate('/login');
+            }}
+            startIcon={<Logout />}
+          >
+            Logout
+          </Button>
+        </AppBar>
+        <Container maxWidth="lg">
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4">User Management</Typography>
+        <Box display="flex" gap={2}>
+          <Button 
+            variant="contained"
+            onClick={refreshUsers}
+            startIcon={<Refresh />}
+            disabled={loading}
+          >
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <TextField
+            size="small"
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            variant="outlined"
+            disabled={loading}
+          />
+        </Box>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Email</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Subjects</TableCell>
+              <TableCell align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredUsers.map((user) => (
+              <TableRow key={user._id} hover>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {user.name}
+                    {user.isAdmin && (
+                      <Chip label="Admin" size="small" color="primary" variant="outlined" />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>
+                  <Chip 
+                    label={user.status || 'offline'} 
+                    color={user.status === 'online' ? 'success' : 'default'}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {user.subjectsToTeach?.map((subj, i) => (
+                      <Chip 
+                        key={`teach-${i}`}
+                        label={`${subj.subject} (${'★'.repeat(subj.proficiency)})`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                    {user.subjectsToLearn?.map((subj, i) => (
+                      <Chip 
+                        key={`learn-${i}`}
+                        label={`${subj.subject} (${'★'.repeat(subj.proficiency)})`}
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Delete user">
+                    <IconButton
+                      color="error"
+                      onClick={() => setDeleteDialog({ 
+                        open: true, 
+                        userId: user._id, 
+                        userName: user.name 
+                      })}
+                      disabled={user.isAdmin}
+                    >
+                      <Delete />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ ...deleteDialog, open: false })}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {deleteDialog.userName}? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialog({ ...deleteDialog, open: false })}>Cancel</Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+        </Container>
+      </MainContent>
+    </AdminContainer>
+  );
+};
 
 export default AdminDashboard;

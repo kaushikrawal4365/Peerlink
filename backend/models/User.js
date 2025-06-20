@@ -98,6 +98,15 @@ const userSchema = new mongoose.Schema({
     type: Number, 
     default: 0 
   },
+  status: {
+    type: String,
+    enum: ['online', 'offline', 'blocked'],
+    default: 'offline'
+  },
+  lastActive: {
+    type: Date,
+    default: Date.now
+  },
   profileCompleted: {
     type: Boolean,
     default: false

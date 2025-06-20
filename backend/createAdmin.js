@@ -21,7 +21,7 @@ const createAdmin = async () => {
             const hashedPassword = await bcrypt.hash('admin123456', 10);
             adminUser.password = hashedPassword;
             adminUser.isAdmin = true;
-            adminUser.status = 'active';
+            adminUser.status = 'online';
             await adminUser.save();
             console.log('✅ Admin password updated successfully');
         } else {
@@ -32,7 +32,7 @@ const createAdmin = async () => {
                 email: 'admin@peerlink.com',
                 password: hashedPassword,
                 isAdmin: true,
-                status: 'active',
+                status: 'online',
                 profileCompleted: true,
                 subjectsToTeach: [],
                 subjectsToLearn: [],

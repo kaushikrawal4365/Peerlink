@@ -71,6 +71,29 @@ router.put('/users/:userId/status', adminMiddleware, async (req, res) => {
     }
 });
 
+// Delete a user
+router.delete('/users/:userId', adminMiddleware, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Prevent deleting admin users
+        const user = await User.findById(userId);
+        if (user?.isAdmin) {
+            return res.status(403).json({ error: 'Cannot delete admin users' });
+        }
+        
+        await User.findByIdAndDelete(userId);
+        
+        // Optionally: Delete user's messages, matches, etc.
+        await Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] });
+        
+        res.json({ success: true, message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
 // Get user activity logs
 router.get('/logs', adminMiddleware, async (req, res) => {
     try {
