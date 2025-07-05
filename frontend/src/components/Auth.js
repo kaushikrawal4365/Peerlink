@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -19,8 +19,9 @@ import {
   Email as EmailIcon,
   Person as PersonIcon,
 } from '@mui/icons-material';
-import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 
 const MotionPaper = motion(Paper);
 
@@ -30,6 +31,7 @@ function Auth() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -42,24 +44,31 @@ function Auth() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
     try {
       if (isLogin) {
         // Login
-        const res = await axios.post('http://localhost:5001/api/auth/login', {
+        const response = await axios.post('http://localhost:5001/api/auth/login', {
           email: formData.email,
           password: formData.password,
         });
         
-        // Save token and user data to localStorage
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('isAdmin', res.data.isAdmin);
-        localStorage.setItem('userName', res.data.name);
-        localStorage.setItem('isProfileComplete', res.data.isProfileComplete);
+        // Save the token and user data
+        const { token, isAdmin, name, isProfileComplete } = response.data;
         
-        // Redirect to admin page if admin, otherwise to dashboard
-        if (res.data.isAdmin) {
+        // Save to localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('isAdmin', isAdmin || false);
+        localStorage.setItem('userName', name || '');
+        localStorage.setItem('isProfileComplete', isProfileComplete || false);
+        
+        // Call the context login to update the auth state
+        await login(token);
+        
+        // Redirect based on user role and profile status
+        if (isAdmin) {
           navigate('/admin');
-        } else if (!res.data.isProfileComplete) {
+        } else if (!isProfileComplete) {
           navigate('/setup');
         } else {
           navigate('/dashboard');
@@ -69,14 +78,33 @@ function Auth() {
         if (formData.password !== formData.confirmPassword) {
           throw new Error('Passwords do not match');
         }
-        const res = await axios.post('http://localhost:5001/api/auth/signup', {
+        // First, create the user
+        const signupResponse = await axios.post('http://localhost:5001/api/auth/signup', {
           name: formData.name,
           email: formData.email,
           password: formData.password,
         });
-        localStorage.setItem('token', res.data.token);
+        
+        // Then login to get the token
+        const loginResponse = await axios.post('http://localhost:5001/api/auth/login', {
+          email: formData.email,
+          password: formData.password,
+        });
+        
+        const { token, isAdmin, name, isProfileComplete } = loginResponse.data;
+        
+        // Save to localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('isAdmin', isAdmin || false);
+        localStorage.setItem('userName', name || '');
+        localStorage.setItem('isProfileComplete', isProfileComplete || false);
+        
+        // Update auth context with the new token and user data
+        // Force isProfileComplete to false for new users
+        await login(token, { isProfileComplete: false });
+        
         // Redirect to setup page after signup
-        navigate('/setup');
+        navigate('/setup', { replace: true });
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'An error occurred');

@@ -1,23 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
-const { calculateBestMatches } = require('../utils/mlMatches');
+const { 
+  getPotentialMatches, 
+  respondToMatch, 
+  getMyMatches 
+} = require('../controllers/matchController');
 
-// ✅ Get ML-powered matches sorted by score
-router.get('/', auth, async (req, res) => {
-  try {
-    const currentUser = await User.findById(req.user._id);
-    const allUsers = await User.find({ _id: { $ne: currentUser._id } });
+// @route   GET /api/matches
+// @desc    Get potential matches for the current user
+// @access  Private
+router.get('/', auth, getPotentialMatches);
 
-    const matches = await calculateBestMatches(currentUser, allUsers);
+// @route   PUT /api/matches/:userId
+// @desc    Respond to a match (accept/reject)
+// @access  Private
+router.put('/:userId', auth, respondToMatch);
 
-    res.json(matches);
-  } catch (error) {
-    console.error('❌ Error fetching ML matches:', error);
-    res.status(500).json({ error: 'Server Error' });
-  }
-});
+// @route   GET /api/matches/accepted
+// @desc    Get all accepted matches for the current user
+// @access  Private
+router.get('/accepted', auth, getMyMatches);
 
 // ✅ Like/connect with another user
 router.post('/like/:userId', auth, async (req, res) => {

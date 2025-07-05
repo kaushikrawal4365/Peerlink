@@ -80,12 +80,31 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log('Login attempt for email:', email);
+  
   try {
+    if (!email || !password) {
+      console.log('Missing email or password');
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
     const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    
+    if (!user) {
+      console.log('No user found with email:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    console.log('User found. Checking password...');
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
+    if (!isPasswordValid) {
+      console.log('Invalid password for user:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
     if (user.status === 'blocked') {
+      console.log('Blocked account attempt:', email);
       return res.status(403).json({ error: 'Account is blocked.' });
     }
     user.status = 'online';
@@ -244,18 +263,29 @@ const updateProfile = async (req, res) => {
     const { bio, subjectsToTeach = [], subjectsToLearn = [], profileImage } = req.body;
     
     try {
-        // Validate subjects
-        const validateSubjects = (subjects) => {
-            return subjects.map(subj => ({
-                subject: String(subj.subject || '').trim(),
-                proficiency: Math.min(5, Math.max(1, Number(subj.proficiency) || 3))
-            })).filter(subj => subj.subject); // Remove empty subjects
+        // Validate subjects based on their type (teach/learn)
+        const validateSubjects = (subjects, type = 'teach') => {
+            return subjects.map(subj => {
+                if (type === 'teach') {
+                    return {
+                        subject: String(subj.subject || '').trim(),
+                        proficiency: Math.min(5, Math.max(1, Number(subj.proficiency) || 3)),
+                        teachingExperience: Number(subj.teachingExperience) || 0
+                    };
+                } else { // learn
+                    return {
+                        subject: String(subj.subject || '').trim(),
+                        desiredLevel: Math.min(5, Math.max(1, Number(subj.desiredLevel) || 1)),
+                        priority: Math.min(5, Math.max(1, Number(subj.priority) || 1))
+                    };
+                }
+            }).filter(subj => subj.subject); // Remove empty subjects
         };
 
         const updateData = {
             bio: String(bio || '').trim(),
-            subjectsToTeach: validateSubjects(subjectsToTeach),
-            subjectsToLearn: validateSubjects(subjectsToLearn),
+            subjectsToTeach: validateSubjects(subjectsToTeach, 'teach'),
+            subjectsToLearn: validateSubjects(subjectsToLearn, 'learn'),
             isProfileComplete: true,
             updatedAt: new Date(),
             ...(profileImage && { profileImage }) // Only include profileImage if it exists

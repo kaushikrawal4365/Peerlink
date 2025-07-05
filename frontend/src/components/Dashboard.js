@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Container,
@@ -83,35 +85,84 @@ const features = [
 ];
 
 function Dashboard() {
-  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const theme = useTheme();
+  const [stats, setStats] = useState({ matches: 0, connections: 0, sessions: 0 });
+  const [recentActivity, setRecentActivity] = useState([]);
+  
+  const loadDashboardData = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in.');
+      setLoading(false);
+      navigate('/login');
+      return;
+    }
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Please log in.');
-        setLoading(false);
-        return;
+    try {
+      setLoading(true);
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      
+      // Load user profile data
+      const userRes = await axios.get('http://localhost:5001/api/users/profile', config);
+      
+      // Load dashboard stats (example - update with your actual API endpoint)
+      // const statsRes = await axios.get('http://localhost:5001/api/dashboard/stats', config);
+      // setStats(statsRes.data);
+      
+      // Load recent activity (example - update with your actual API endpoint)
+      // const activityRes = await axios.get('http://localhost:5001/api/activity/recent', config);
+      // setRecentActivity(activityRes.data);
+      
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setError('Failed to load dashboard data. Please try again.');
+      
+      // If unauthorized, redirect to login
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Load data when component mounts
+  useEffect(() => {
+    const checkProfileAndLoadData = async () => {
       try {
-        setLoading(true);
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const userRes = await axios.get('http://localhost:5001/api/users/profile', config);
-        setUser(userRes.data);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to fetch data. Please try again.');
-      } finally {
-        setLoading(false);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          navigate('/login');
+          return;
+        }
+        
+        // If user data is not loaded yet, wait for it
+        if (!user) return;
+        
+        // Redirect to setup if profile is not complete
+        if (!user.isProfileComplete) {
+          navigate('/setup');
+          return;
+        }
+        
+        // Load dashboard data if profile is complete
+        await loadDashboardData();
+        
+      } catch (error) {
+        console.error('Error in dashboard initialization:', error);
+        setError('Failed to initialize dashboard. Please try again.');
       }
     };
-    fetchData();
-  }, []);
-
+    
+    checkProfileAndLoadData();
+  }, [user, navigate]);
+  
+  // Show loading state while checking auth or loading data
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -119,7 +170,8 @@ function Dashboard() {
       </Box>
     );
   }
-
+  
+  // Show error message if any
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -127,8 +179,27 @@ function Dashboard() {
       </Box>
     );
   }
-
+  
+  // If no user is available, don't render anything (should be handled by auth flow)
   if (!user) return null;
+
+  // Show loading state while checking auth or loading data
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  
+  // Show error message if any
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Typography color="error">{error}</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh' }}>

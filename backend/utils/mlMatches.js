@@ -25,42 +25,42 @@ const calculateBestMatches = async (currentUser, allUsers) => {
       throw new Error('Invalid input parameters');
     }
 
-    // Initialize empty arrays if they don't exist
+    // Ensure arrays exist and are properly formatted
     currentUser.subjectsToLearn = Array.isArray(currentUser.subjectsToLearn) 
-      ? currentUser.subjectsToLearn 
+      ? currentUser.subjectsToLearn.map(s => s.trim().toLowerCase())
       : [];
     currentUser.subjectsToTeach = Array.isArray(currentUser.subjectsToTeach) 
-      ? currentUser.subjectsToTeach 
+      ? currentUser.subjectsToTeach.map(s => s.trim().toLowerCase())
       : [];
 
     console.log(`Current user (${currentUser.name || currentUser.email}):`);
-    console.log('- Teaching:', currentUser.subjectsToTeach.map(s => `${s.subject} (${s.proficiency})`).join(', '));
-    console.log('- Learning:', currentUser.subjectsToLearn.map(s => `${s.subject} (${s.proficiency})`).join(', '));
+    console.log('- Teaching:', currentUser.subjectsToTeach.join(', '));
+    console.log('- Learning:', currentUser.subjectsToLearn.join(', '));
 
     // Get unique subject list across all users
     const subjectSet = new Set();
     
     // Add current user's subjects
-    currentUser.subjectsToLearn.forEach(s => s && s.subject && subjectSet.add(s.subject.trim().toLowerCase()));
-    currentUser.subjectsToTeach.forEach(s => s && s.subject && subjectSet.add(s.subject.trim().toLowerCase()));
+    currentUser.subjectsToLearn.forEach(s => s && subjectSet.add(s.trim().toLowerCase()));
+    currentUser.subjectsToTeach.forEach(s => s && subjectSet.add(s.trim().toLowerCase()));
     
     // Add other users' subjects
     allUsers.forEach(user => {
-      (user.subjectsToLearn || []).forEach(s => s && s.subject && subjectSet.add(s.subject.trim().toLowerCase()));
-      (user.subjectsToTeach || []).forEach(s => s && s.subject && subjectSet.add(s.subject.trim().toLowerCase()));
+      (Array.isArray(user.subjectsToLearn) ? user.subjectsToLearn : []).forEach(s => s && subjectSet.add(s.trim().toLowerCase()));
+      (Array.isArray(user.subjectsToTeach) ? user.subjectsToTeach : []).forEach(s => s && subjectSet.add(s.trim().toLowerCase()));
     });
     
     const subjectList = Array.from(subjectSet);
     console.log('\n📋 All unique subjects:', Array.from(subjectSet).join(', '));
 
-    // Vectorize user's subjects
+    // Vectorize user's subjects (1 if subject exists, 0 otherwise)
     const vectorize = (user, type) => {
-      const subjects = Array.isArray(user[type]) ? user[type] : [];
-      return subjectList.map(subject => {
-        const entry = subjects.find(s => s && s.subject && s.subject.trim().toLowerCase() === subject);
-        const proficiency = entry && !isNaN(entry.proficiency) ? Number(entry.proficiency) : 0;
-        return Math.min(5, Math.max(1, proficiency)); // Ensure between 1-5
-      });
+      const subjects = Array.isArray(user[type]) 
+        ? user[type].map(s => s.trim().toLowerCase())
+        : [];
+      return subjectList.map(subject => 
+        subjects.includes(subject) ? 1 : 0
+      );
     };
 
     const currentLearn = vectorize(currentUser, 'subjectsToLearn');
@@ -96,23 +96,17 @@ const calculateBestMatches = async (currentUser, allUsers) => {
         
         // Find common subjects
         const commonTeach = (user.subjectsToTeach || []).filter(s => 
-          s && s.subject && currentUser.subjectsToLearn.some(
-            cs => cs && cs.subject && 
-            cs.subject.trim().toLowerCase() === s.subject.trim().toLowerCase()
-          )
+          currentUser.subjectsToLearn.includes(s)
         );
         
         const commonLearn = (user.subjectsToLearn || []).filter(s => 
-          s && s.subject && currentUser.subjectsToTeach.some(
-            cs => cs && cs.subject && 
-            cs.subject.trim().toLowerCase() === s.subject.trim().toLowerCase()
-          )
+          currentUser.subjectsToTeach.includes(s)
         );
         
         console.log('- Common subjects they teach that you learn:', 
-          commonTeach.map(s => s.subject).join(', ') || 'None');
+          commonTeach.join(', ') || 'None');
         console.log('- Common subjects you teach that they learn:', 
-          commonLearn.map(s => s.subject).join(', ') || 'None');
+          commonLearn.join(', ') || 'None');
         
         // Only include matches with some common subjects
         if (commonTeach.length > 0 || commonLearn.length > 0) {

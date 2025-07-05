@@ -1,5 +1,6 @@
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React, { useContext } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Drawer,
@@ -29,8 +30,15 @@ const menuItems = [
   { text: 'Profile', path: '/profile', icon: <PersonIcon /> },
 ];
 
-function NavMenu({ handleLogout }) {
+function NavMenu() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   const drawerContent = (
     <div>

@@ -30,43 +30,38 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  subjectsToLearn: [{ 
-    subject: {
-      type: String,
-      required: true
-    },
-    proficiency: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: 1
-    }
+  subjectsToLearn: [{
+    subject: { type: String, required: true },
+    desiredLevel: { type: Number, required: true },
+    priority: { type: Number, required: true }
   }],
-  subjectsToTeach: [{ 
-    subject: {
-      type: String,
-      required: true
-    },
-    proficiency: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: 3
-    }
+  subjectsToTeach: [{
+    subject: { type: String, required: true },
+    proficiency: { type: Number, required: true },
+    teachingExperience: { type: Number, default: 0 }
   }],
   matches: [{
-    user: { 
+    userId: { 
       type: mongoose.Schema.Types.ObjectId, 
-      ref: 'User' 
-    },
-    matchScore: { 
-      type: Number, 
-      default: 0 
+      ref: 'User',
+      required: true
     },
     status: {
       type: String,
       enum: ['pending', 'accepted', 'rejected'],
       default: 'pending'
+    },
+    matchScore: {
+      type: Number,
+      required: true
+    },
+    commonSubjects: {
+      teach: [String],
+      learn: [String]
+    },
+    matchDate: {
+      type: Date,
+      default: Date.now
     }
   }],
   calendar: [{

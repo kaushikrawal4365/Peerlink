@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Typography,
@@ -45,7 +46,11 @@ const SetupForm = () => {
 
   const handleAddTeachSubject = () => {
     if (teachSubject && !subjectsToTeach.find(s => s.subject === teachSubject)) {
-      setSubjectsToTeach([...subjectsToTeach, { subject: teachSubject, proficiency: teachProficiency }]);
+      setSubjectsToTeach([...subjectsToTeach, { 
+        subject: teachSubject, 
+        proficiency: teachProficiency,
+        teachingExperience: 0 // Default teaching experience
+      }]);
       setTeachSubject('');
       setTeachProficiency(3);
     }
@@ -53,7 +58,11 @@ const SetupForm = () => {
 
   const handleAddLearnSubject = () => {
     if (learnSubject && !subjectsToLearn.find(s => s.subject === learnSubject)) {
-      setSubjectsToLearn([...subjectsToLearn, { subject: learnSubject, proficiency: learnProficiency }]);
+      setSubjectsToLearn([...subjectsToLearn, { 
+        subject: learnSubject, 
+        desiredLevel: learnProficiency, // Using proficiency as desiredLevel
+        priority: 1 // Default priority
+      }]);
       setLearnSubject('');
       setLearnProficiency(1);
     }
@@ -67,6 +76,8 @@ const SetupForm = () => {
     setSubjectsToLearn(subjectsToLearn.filter(s => s.subject !== subjectToRemove));
   };
 
+  const { login } = useAuth();
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -74,29 +85,78 @@ const SetupForm = () => {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        'http://localhost:5001/api/users/profile',
-        {
-          bio,
-          subjectsToTeach,
-          subjectsToLearn,
-          isProfileComplete: true
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      // Validate that user has added at least one subject to teach and learn
+      if (subjectsToTeach.length === 0 || subjectsToLearn.length === 0) {
+        throw new Error('Please add at least one subject to teach and one to learn');
+      }
 
-      // Update local storage
-      localStorage.setItem('isProfileComplete', 'true');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
       
-      setSuccess('Profile setup completed successfully!');
-      setTimeout(() => navigate('/dashboard'), 1500);
+      console.log('Sending profile update with data:', {
+        bio,
+        subjectsToTeach,
+        subjectsToLearn,
+        isProfileComplete: true
+      });
+      
+      // First, update the user's profile with bio and subjects
+      try {
+        const response = await axios.put(
+          'http://localhost:5001/api/users/profile',
+          {
+            bio,
+            subjectsToTeach,
+            subjectsToLearn,
+            isProfileComplete: true
+          },
+          {
+            headers: { 
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}` 
+            },
+            timeout: 10000 // 10 second timeout
+          }
+        );
+        console.log('Profile update response:', response.data);
+
+        // Update local storage
+        localStorage.setItem('isProfileComplete', 'true');
+        
+        // Update the auth context with the new user data
+        await login(token);
+        
+        setSuccess('Profile setup completed successfully!');
+        setTimeout(() => navigate('/dashboard'), 1500);
+      } catch (axiosError) {
+        console.error('Axios error details:', {
+          message: axiosError.message,
+          response: axiosError.response?.data,
+          status: axiosError.response?.status,
+          config: {
+            url: axiosError.config?.url,
+            method: axiosError.config?.method,
+            data: axiosError.config?.data
+          }
+        });
+        throw axiosError; // Re-throw to be caught by the outer catch
+      }
     } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Failed to update profile. Please try again.';
+      console.error('Profile update error details:', {
+        message: err.message,
+        stack: err.stack,
+        response: err.response?.data
+      });
+      
+      const errorMessage = err.response?.data?.error || 
+                         err.response?.data?.message || 
+                         err.message || 
+                         'Failed to update profile. Please try again.';
+      
       setError(errorMessage);
-      console.error('Profile update error:', err);
+      
       // If it's an authentication error, redirect to login
       if (err.response?.status === 401) {
         setTimeout(() => {

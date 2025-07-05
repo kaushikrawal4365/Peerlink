@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Paper,
@@ -19,6 +20,7 @@ import { School as SchoolIcon } from '@mui/icons-material';
 
 function Signup() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,44 +35,39 @@ function Signup() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-// In Signup.js, update the handleSubmit function:
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-  if (formData.password !== formData.confirmPassword) {
-    setError('Passwords do not match');
-    setLoading(false);
-    return;
-  }
+    try {
+      // First, register the user
+      const response = await axios.post('http://localhost:5001/api/auth/signup', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
 
-  try {
-    const res = await axios.post('http://localhost:5001/api/auth/signup', {
-      name: formData.name,
-      email: formData.email,
-      password: formData.password
-    });
-
-    // Save token and user data to localStorage
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('isAdmin', res.data.isAdmin);
-    localStorage.setItem('userName', res.data.name);
-    localStorage.setItem('isProfileComplete', res.data.isProfileComplete);
-
-    // Redirect based on profile completion status
-    if (!res.data.isProfileComplete) {
-      navigate('/setup');
-    } else {
-      navigate('/dashboard');
+      // Get the token from the signup response
+      const { token, isAdmin, name, isProfileComplete } = response.data;
+      
+      // Update auth context and local storage
+      await login(token, { isProfileComplete });
+      
+      // Move to the next step
+      setActiveStep(1);
+      
+      // Automatically move to setup after a short delay
+      setTimeout(() => {
+        navigate('/setup');
+      }, 2000);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Signup failed. Please try again.');
+      console.error('Signup error:', err);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    setError(err.response?.data?.msg || 'Signup failed. Please try again.');
-    console.error('Signup error:', err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const steps = ['Account Details', 'Personal Information'];
 

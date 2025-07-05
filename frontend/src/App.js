@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import axios from 'axios';
-import { Box } from '@mui/material';
+import React from 'react';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
+
+// Context
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Component Imports
 import Auth from './components/Auth';
@@ -9,7 +11,7 @@ import SetupForm from './components/SetupForm';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Signup from './components/Signup';
-import MatchesSwipe from './components/MatchesSwipe';
+import Matches from './components/Matches';
 import Chat from './components/Chat';
 import Profile from './components/Profile';
 import Notifications from './components/Notifications';
@@ -19,49 +21,24 @@ import LandingPage from './components/LandingPage';
 
 const drawerWidth = 240;
 
-function App() {
-  const navigate = useNavigate();
+function AppContent() {
+  const { token, user, logout, loading } = useAuth();
   const location = useLocation();
-  const [notifications, setNotifications] = useState([]);
-  const [profileSetupComplete, setProfileSetupComplete] = useState(false);
-
-  const token = localStorage.getItem('token');
-  const isAdmin = localStorage.getItem('isAdmin') === 'true';
-
-  useEffect(() => {
-    const checkProfileStatus = async () => {
-      if (token) {
-        try {
-          const res = await axios.get('http://localhost:5001/api/users/profile', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const isComplete = res.data.isProfileComplete;
-          setProfileSetupComplete(isComplete);
-          localStorage.setItem('isProfileComplete', isComplete.toString());
-        } catch (error) {
-          console.error('Failed to check profile status', error);
-          setProfileSetupComplete(false);
-          localStorage.removeItem('profileSetupComplete');
-        }
-      }
-    };
-    checkProfileStatus();
-  }, [token]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('isAdmin');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('isProfileComplete');
-    setProfileSetupComplete(false);
-    navigate('/');
-  };
-
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  // Check both user object and localStorage for profile completion status
+  const isProfileSetupComplete = user?.isProfileComplete || 
+                               localStorage.getItem('isProfileComplete') === 'true';
+  
+  // Show loading state while checking auth status
+  if (loading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <CircularProgress />
+    </Box>;
+  }
 
   return (
     <Box sx={{ display: 'flex' }}>
-      {!isAuthPage && token && <NavMenu handleLogout={handleLogout} notifications={notifications} />}
+      {!isAuthPage && token && <NavMenu handleLogout={logout} notifications={[]} />}
       <Box
         component="main"
         sx={{
@@ -74,18 +51,39 @@ function App() {
       >
         <Routes>
           <Route path="/" element={token ? <Navigate to="/dashboard" /> : <LandingPage />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/login" element={token ? <Navigate to="/dashboard" /> : <Auth />} />
-          <Route path="/setup" element={token && !profileSetupComplete ? <SetupForm /> : <Navigate to="/dashboard" />} />
+          <Route path="/signup" element={!token ? <Signup /> : <Navigate to="/dashboard" />} />
+          <Route path="/login" element={!token ? <Auth /> : <Navigate to="/dashboard" />} />
+          <Route 
+            path="/setup" 
+            element={
+              token ? (
+                isProfileSetupComplete ? (
+                  <Navigate to="/dashboard" />
+                ) : (
+                  <SetupForm />
+                )
+              ) : (
+                <Navigate to="/login" state={{ from: '/setup' }} />
+              )
+            } 
+          />
           <Route
             path="/dashboard"
-            element={<PrivateRoute>{profileSetupComplete ? <Dashboard /> : <Navigate to="/setup" />}</PrivateRoute>}
+            element={<PrivateRoute>{isProfileSetupComplete ? <Dashboard /> : <Navigate to="/setup" />}</PrivateRoute>}
+          />
+          <Route
+            path="/matches"
+            element={
+              <PrivateRoute>
+                {isProfileSetupComplete ? <Matches /> : <Navigate to="/setup" />}
+              </PrivateRoute>
+            }
           />
           <Route
             path="/admin"
-            element={<PrivateRoute>{isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" />}</PrivateRoute>}
+            element={<PrivateRoute>{user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" />}</PrivateRoute>}
           />
-          <Route path="/matches" element={<PrivateRoute><MatchesSwipe /></PrivateRoute>} />
+          <Route path="/matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
           <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
           <Route path="/chat/:matchId" element={<PrivateRoute><Chat /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
@@ -95,6 +93,14 @@ function App() {
         </Routes>
       </Box>
     </Box>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
