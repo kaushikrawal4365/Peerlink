@@ -7,11 +7,21 @@ const { findMatches, updateMatchStatus, getAcceptedMatches } = require('../utils
  */
 const getPotentialMatches = async (req, res) => {
   try {
+    console.log('Received request for potential matches for user:', req.user._id);
     const matches = await findMatches(req.user._id);
+    console.log('Found', matches.length, 'potential matches');
     res.json(matches);
   } catch (error) {
-    console.error('Error getting potential matches:', error);
-    res.status(500).json({ error: error.message || 'Server error while finding matches' });
+    console.error('Error getting potential matches:', {
+      message: error.message,
+      stack: error.stack,
+      userId: req.user?._id,
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ 
+      error: 'Server error while finding matches',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

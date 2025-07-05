@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -31,7 +31,7 @@ export const matchAPI = {
    */
   getPotentialMatches: async () => {
     try {
-      const response = await api.get('/matches');
+      const response = await api.get('/api/matches');
       return response.data;
     } catch (error) {
       console.error('Error fetching potential matches:', error);
@@ -46,7 +46,7 @@ export const matchAPI = {
    */
   acceptMatch: async (userId) => {
     try {
-      const response = await api.put(`/matches/${userId}`, { status: 'accepted' });
+      const response = await api.put(`/api/matches/${userId}`, { status: 'accepted' });
       return response.data;
     } catch (error) {
       console.error('Error accepting match:', error);
@@ -61,7 +61,7 @@ export const matchAPI = {
    */
   rejectMatch: async (userId) => {
     try {
-      const response = await api.put(`/matches/${userId}`, { status: 'rejected' });
+      const response = await api.put(`/api/matches/${userId}`, { status: 'rejected' });
       return response.data;
     } catch (error) {
       console.error('Error rejecting match:', error);
@@ -75,7 +75,7 @@ export const matchAPI = {
    */
   getAcceptedMatches: async () => {
     try {
-      const response = await api.get('/matches/accepted');
+      const response = await api.get('/api/matches/accepted');
       return response.data;
     } catch (error) {
       console.error('Error getting accepted matches:', error);
